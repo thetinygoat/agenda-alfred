@@ -70,37 +70,44 @@ func formatEventDetails(event: EKEvent) -> String {
 }
 
 struct CalendarEvent: Codable {
-    let id: String
+    let uid: String
     let title: String
     let startDate: Date
     let endDate: Date
     let isAllDay: Bool
     let location: String?
     let notes: String?
-    let url: URL?
-    let calendarTitle: String
-    let details: String
+    let arg: URL?
+    let calendar: String
+    let subtitle: String
 
     // Create from EKEvent
     init(from event: EKEvent) {
-        self.id = event.eventIdentifier ?? UUID().uuidString
+        self.uid = event.eventIdentifier ?? UUID().uuidString
         self.title = event.title ?? "Untitled"
         self.startDate = event.startDate
         self.endDate = event.endDate
         self.isAllDay = event.isAllDay
         self.location = event.location
         self.notes = event.notes
-        self.url = event.url
-        self.calendarTitle = event.calendar.title
-        self.details = formatEventDetails(event: event)
+        self.arg = event.url
+        self.calendar = event.calendar.title
+        self.subtitle = formatEventDetails(event: event)
     }
+}
 
+struct AlfredItems: Codable {
+    let items: [CalendarEvent]
+    init(from events: [CalendarEvent]) {
+        self.items = events
+    }
 }
 
 extension Array where Element == EKEvent {
     func toJSON() -> String? {
         // Convert EKEvents to our Codable struct
         let events = self.map { CalendarEvent(from: $0) }
+        let items = AlfredItems(from: events)
 
         // Create JSON encoder with formatting
         let encoder = JSONEncoder()
@@ -108,7 +115,7 @@ extension Array where Element == EKEvent {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
         // Encode to JSON data then to string
-        guard let jsonData = try? encoder.encode(events) else {
+        guard let jsonData = try? encoder.encode(items) else {
             return nil
         }
 
@@ -119,13 +126,24 @@ extension Array where Element == EKEvent {
 class CalendarManager {
     let eventStore = EKEventStore()
     func requestAccess(completion: @escaping (Bool) -> Void) {
-        self.eventStore.requestFullAccessToEvents { granted, error in
-            if let error {
-                print(error)
-                completion(false)
-                return
+        if #available(macOS 14, *) {
+            self.eventStore.requestFullAccessToEvents { granted, error in
+                if let error {
+                    print(error)
+                    completion(false)
+                    return
+                }
+                completion(granted)
             }
-            completion(granted)
+        } else {
+            self.eventStore.requestAccess(to: .event) { granted, error in
+                if let error {
+                    print(error)
+                    completion(false)
+                    return
+                }
+                completion(granted)
+            }
         }
     }
 
