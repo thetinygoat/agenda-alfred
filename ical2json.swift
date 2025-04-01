@@ -90,7 +90,7 @@ struct CalendarEvent: Codable {
         self.isAllDay = event.isAllDay
         self.location = event.location
         self.notes = event.notes
-        self.arg = event.url
+        self.arg = event.meetingURL
         self.calendar = event.calendar.title
         self.subtitle = formatEventDetails(event: event)
     }
@@ -122,6 +122,172 @@ extension Array where Element == EKEvent {
         return String(data: jsonData, encoding: .utf8)
     }
 }
+
+enum MeetingPlatform: String, CaseIterable {
+    case zoom = "zoom"
+    case googleMeet = "meet.google"
+    case microsoftTeams = "teams.microsoft"
+    case webex = "webex"
+    case jitsi = "meet.jit.si"
+    case gotomeeting = "gotomeeting"
+    case skype = "skype"
+    case bluejeans = "bluejeans"
+    case whereby = "whereby"
+    case chime = "chime.aws"
+    
+    var patterns: [String] {
+        switch self {
+        case .zoom:
+            return [
+                "https?://[a-zA-Z0-9.-]+\\.zoom\\.us/[a-zA-Z0-9/?.=&-]+",
+                "zoom\\.us/[a-zA-Z0-9/?.=&-]+"
+            ]
+        case .googleMeet:
+            return [
+                "https?://meet\\.google\\.com/[a-zA-Z0-9-]+",
+                "meet\\.google\\.com/[a-zA-Z0-9-]+"
+            ]
+        case .microsoftTeams:
+            return [
+                "https?://teams\\.microsoft\\.com/l/meetup-join/[a-zA-Z0-9%_.~=-]+",
+                "teams\\.microsoft\\.com/l/meetup-join/[a-zA-Z0-9%_.~=-]+"
+            ]
+        case .webex:
+            return [
+                "https?://[a-zA-Z0-9.-]+\\.webex\\.com/[a-zA-Z0-9/?.=&%-]+",
+                "webex\\.com/[a-zA-Z0-9/?.=&%-]+"
+            ]
+        case .jitsi:
+            return [
+                "https?://meet\\.jit\\.si/[a-zA-Z0-9-]+",
+                "meet\\.jit\\.si/[a-zA-Z0-9-]+"
+            ]
+        case .gotomeeting:
+            return [
+                "https?://[a-zA-Z0-9.-]*gotomeeting\\.com/[a-zA-Z0-9/?.=&-]+",
+                "gotomeeting\\.com/[a-zA-Z0-9/?.=&-]+"
+            ]
+        case .skype:
+            return [
+                "https?://join\\.skype\\.com/[a-zA-Z0-9]+",
+                "join\\.skype\\.com/[a-zA-Z0-9]+"
+            ]
+        case .bluejeans:
+            return [
+                "https?://[a-zA-Z0-9.-]*bluejeans\\.com/[a-zA-Z0-9/?.=&-]+",
+                "bluejeans\\.com/[a-zA-Z0-9/?.=&-]+"
+            ]
+        case .whereby:
+            return [
+                "https?://whereby\\.com/[a-zA-Z0-9-]+",
+                "whereby\\.com/[a-zA-Z0-9-]+"
+            ]
+        case .chime:
+            return [
+                "https?://[a-zA-Z0-9.-]*\\.chime\\.aws/[a-zA-Z0-9/?.=&-]+",
+                "chime\\.aws/[a-zA-Z0-9/?.=&-]+"
+            ]
+        }
+    }
+}
+
+class MeetingURLExtractor {
+    
+    /// Extract meeting URL from an EKEvent
+    /// - Parameter event: The calendar event
+    /// - Returns: The meeting URL if found, otherwise nil
+    static func extractMeetingURL(from event: EKEvent) -> URL? {
+        // First check if the event already has a URL
+        if let existingURL = event.url, isMeetingURL(existingURL.absoluteString) {
+            return existingURL
+        }
+        
+        // If there are no notes, we can't extract a URL
+        guard let notes = event.notes else {
+            return nil
+        }
+        
+        return findMeetingURLInText(notes)
+    }
+    
+    /// Find a meeting URL in a text
+    /// - Parameter text: The text to search in
+    /// - Returns: The meeting URL if found, otherwise nil
+    static func findMeetingURLInText(_ text: String) -> URL? {
+        // First look for full URLs
+        if let url = extractFullURL(from: text) {
+            return url
+        }
+        
+        // Then try to extract partial URLs and prepend "https://"
+        if let partialURL = extractPartialURL(from: text) {
+            return URL(string: "https://\(partialURL)")
+        }
+        
+        return nil
+    }
+    
+    /// Extract a full URL from text
+    /// - Parameter text: The text to search in
+    /// - Returns: The URL if found, otherwise nil
+    private static func extractFullURL(from text: String) -> URL? {
+        for platform in MeetingPlatform.allCases {
+            for pattern in platform.patterns {
+                if let range = text.range(of: "https?://\(pattern)", options: .regularExpression) {
+                    let urlString = String(text[range])
+                    return URL(string: urlString)
+                }
+            }
+        }
+        
+        // Generic URL pattern (fallback)
+        let urlDetector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let matches = urlDetector?.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+        
+        if let match = matches?.first,
+           let range = Range(match.range, in: text),
+           let url = URL(string: String(text[range])),
+           isMeetingURL(url.absoluteString) {
+            return url
+        }
+        
+        return nil
+    }
+    
+    /// Extract a partial URL (without protocol) from text
+    /// - Parameter text: The text to search in
+    /// - Returns: The partial URL if found, otherwise nil
+    private static func extractPartialURL(from text: String) -> String? {
+        for platform in MeetingPlatform.allCases {
+            for pattern in platform.patterns.filter({ !$0.hasPrefix("https?://") }) {
+                if let range = text.range(of: pattern, options: .regularExpression) {
+                    return String(text[range])
+                }
+            }
+        }
+        return nil
+    }
+    
+    /// Check if a URL is a meeting URL
+    /// - Parameter urlString: The URL string to check
+    /// - Returns: True if it's a meeting URL
+    static func isMeetingURL(_ urlString: String) -> Bool {
+        for platform in MeetingPlatform.allCases {
+            if urlString.lowercased().contains(platform.rawValue) {
+                return true
+            }
+        }
+        return false
+    }
+}
+
+// Extension to EKEvent for easier access
+extension EKEvent {
+    var meetingURL: URL? {
+        return MeetingURLExtractor.extractMeetingURL(from: self)
+    }
+}
+
 
 class CalendarManager {
     let eventStore = EKEventStore()
