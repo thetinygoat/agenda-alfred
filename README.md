@@ -1,56 +1,54 @@
-# Agenda Alfred
+# Agenda
 
-A Python script that integrates with the `agenda` CLI tool to display calendar events in Alfred Script Filter format.
+A lightweight Alfred workflow to display calendar events for a given date and calendar.
 
-## What it does
+## Trigger
 
-This script:
-- Runs the `agenda --date today` command to fetch today's calendar events
-- Parses the JSON output from the agenda CLI tool
-- Formats the events for Alfred workflows with proper relative time display
-- Shows events with titles, time ranges, and relative timing (e.g., "in 2 hours" or "30 mins ago")
+**Keyword:** configurable (default: `agenda`)
 
-## Output Format
+## Variables (Optional)
 
-Each event is displayed with:
-- **Title**: Event name
-- **Subtitle**: Formatted as "Today 9:15 AM - 10:30 AM, in 2 hours"
-- **Arg**: Complete event data in JSON format for further processing
+### Date
 
-## Event Data Structure
+- **Format:** `YYYY-MM-DD`, `today`, `tomorrow`, etc.
+- **Default:** `today`
 
-The script extracts and formats the following event details:
-- `title` - Event title
-- `startDate` - Start time in ISO 8601 format
-- `endDate` - End time in ISO 8601 format  
-- `location` - Event location
-- `notes` - Event notes
-- `meetingURL` - Extracted meeting URL (if found)
+### Calendar
 
-## Requirements
+- **Name or identifier** of a specific calendar (e.g., `Work`, `Personal`)
+- **Default:** all calendars
 
-- Python 3.6+
-- `agenda` CLI tool installed and configured
-- Events should be in ISO 8601 format with UTC timezone (ending with 'Z')
+> **Note:** The first argument is always treated as the date. The second argument is for the calendar. Both are optional. If you omit the date, it defaults to `today`. If you omit the calendar, it shows events from all calendars.
 
-## Usage
+## Usage Examples
 
-Make the script executable:
-```bash
-chmod +x main.py
+### Show today’s events from all calendars
+```
+agenda
 ```
 
-Run directly:
-```bash
-./main.py
+### Show events on a specific date
+```
+agenda 2025-07-02
 ```
 
-Or use in an Alfred workflow as a Script Filter.
+### Show today’s events for a specific calendar
+```
+agenda today Work
+```
 
-## Time Display Features
+### Show events on a specific date and calendar
+```
+agenda 2025-07-02 Personal
+```
 
-- Converts UTC timestamps to local time
-- Shows relative time for events (e.g., "in 30 minutes", "2 hours ago")
-- Automatically converts minutes to hours when >= 60 minutes
-- Handles timezone-aware datetime calculations
-- Gracefully handles missing or null date fields
+## Features
+
+- Pressing <kbd>Enter</kbd> on an event will open its associated meeting URL in your default browser.
+
+## Installation
+
+1. Import the workflow (`.alfredworkflow`).
+2. Open Alfred Preferences → Workflows → Agenda.
+3. Adjust the Keyword if you want a custom trigger.
+4. (Optional) In the Script Filter’s Variables panel, set default date or calendar values.

@@ -4,16 +4,22 @@ import subprocess
 import json
 from datetime import datetime
 import os
+import sys
 
 
-def get_event_details():
+def get_event_details(date, calendar):
     """Runs a CLI command to fetch event details and formats them as JSON."""
     try:
         workflow_dir = os.path.dirname(os.path.abspath(__file__))
         cli_path = os.path.join(workflow_dir, "agenda")
+        cli_command = [cli_path, "--date", date]
+
+        if calendar:
+            cli_command.append("--calendar")
+            cli_command.append(calendar)
 
         result = subprocess.run(
-            [cli_path, "--date", "today"], capture_output=True, text=True, check=True
+            cli_command, capture_output=True, text=True, check=True
         )
 
         # Parse the CLI output assuming it's JSON
@@ -74,14 +80,27 @@ def get_event_details():
                 "text": {"copy": json.dumps(event), "largetype": event["title"]},
             }
             alfred_items.append(alfred_item)
+        
+        if not alfred_items:
+            alfred_items = [{
+                "title": "No events",
+                "subtitle": "Please try another query",
+                "valid": False,
+            }]
 
         return json.dumps({"items": alfred_items}, indent=4)
 
-    except subprocess.CalledProcessError as e:
-        print(f"Error running CLI command: {e}")
-        return json.dumps([])
+    except Exception as e:
+        alfred_items = [{
+            "title": "No events",
+            "subtitle": "Please try another query",
+            "valid": False,
+        }]
+        return json.dumps({"items": alfred_items}, indent=4)
 
 
 if __name__ == "__main__":
-    event_json = get_event_details()
+    date = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else "today"
+    calendar = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
+    event_json = get_event_details(date, calendar)
     print(event_json)
